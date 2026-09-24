@@ -28,7 +28,7 @@ SY = HEIGHT * 0.56
 # ------------------------------------------------------------
 
 obj_files = glob.glob(
-    os.path.expanduser("~/skullmatrix/**/*.obj"),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "**", "*.obj"),
     recursive=True
 )
 
