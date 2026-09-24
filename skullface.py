@@ -990,6 +990,18 @@ def make_frame(shade):
 
         screen = shaken
 
+    background_colors = [
+        "\033[2;34m",
+        "\033[2;35m",
+        "\033[2;31m",
+        "\033[2;32m",
+        "\033[2;33m",
+        "\033[2;36m",
+        "\033[0m",
+    ]
+
+    background_color = background_colors[background_color_mode]
+
     # --------------------------------------------------------
     # Full-skull rainbow color mode
     # --------------------------------------------------------
@@ -1049,24 +1061,6 @@ def make_frame(shade):
         previous_screen = screen.copy()
 
         return "\n".join(output)
-
-    # --------------------------------------------------------
-    # Background color
-    # --------------------------------------------------------
-
-    background_colors = [
-        "\033[2;34m",  # blue
-        "\033[2;35m",  # purple
-        "\033[2;31m",  # red
-        "\033[2;32m",  # green
-        "\033[2;33m",  # yellow
-        "\033[2;36m",  # cyan
-        "\033[0m",     # off
-    ]
-
-    background_color = background_colors[
-        background_color_mode
-    ]
 
     # --------------------------------------------------------
     # Switch subtly between normal and bright selected color
