@@ -6,3 +6,9 @@ __pycache__/
 skull-before-*.py
 skullface-before-*.py
 skullface-broken-*.py
+
+*.zip
+skull-*.py
+skullface-*.py
+find_skull_view.py
+test_skull.py
