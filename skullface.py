@@ -18,10 +18,20 @@ HEIGHT = max(20, _terminal.lines)
 
 CHARS = " .,:;irsXA253hMHGS#9B&@"
 
-# Keep the skull proportional while allowing the background
-# to occupy the entire terminal.
-SX = min(48.0, WIDTH * 0.31)
-SY = HEIGHT * 0.56
+# Scale the skull with the terminal while preserving the
+# original character-cell aspect compensation.
+#
+# Reference renderer size: 110x42
+# Original projection: SX=48, SY=23.5
+#
+# Fit the skull to whichever terminal dimension is limiting.
+scale = min(
+    WIDTH / 110.0,
+    HEIGHT / 42.0
+)
+
+SX = 48.0 * scale
+SY = 23.5 * scale
 
 # ------------------------------------------------------------
 # Find OBJ
@@ -165,7 +175,11 @@ def render_arrays(
     vertices,
     faces,
     vertex_normals,
-    light
+    light,
+    width,
+    height,
+    sx,
+    sy
 ):
 
     rotated = np.empty_like(vertices)
@@ -183,12 +197,12 @@ def render_arrays(
         rotated[i, 2] = vertices[i, 2]
 
     shade = np.zeros(
-        (HEIGHT, WIDTH),
+        (height, width),
         dtype=np.float32
     )
 
     depth = np.full(
-        (HEIGHT, WIDTH),
+        (height, width),
         -9999.0,
         dtype=np.float32
     )
@@ -211,14 +225,14 @@ def render_arrays(
         v2y = rotated[ic, 2]
         v2z = -rotated[ic, 1]
 
-        sx0 = WIDTH / 2.0 + v0x * SX
-        sy0 = HEIGHT / 2.0 - v0y * SY
+        sx0 = width / 2.0 + v0x * sx
+        sy0 = height / 2.0 - v0y * sy
 
-        sx1 = WIDTH / 2.0 + v1x * SX
-        sy1 = HEIGHT / 2.0 - v1y * SY
+        sx1 = width / 2.0 + v1x * sx
+        sy1 = height / 2.0 - v1y * sy
 
-        sx2 = WIDTH / 2.0 + v2x * SX
-        sy2 = HEIGHT / 2.0 - v2y * SY
+        sx2 = width / 2.0 + v2x * sx
+        sy2 = height / 2.0 - v2y * sy
 
         min_x = max(
             0,
@@ -226,7 +240,7 @@ def render_arrays(
         )
 
         max_x = min(
-            WIDTH - 1,
+            width - 1,
             int(max(sx0, sx1, sx2))
         )
 
@@ -236,7 +250,7 @@ def render_arrays(
         )
 
         max_y = min(
-            HEIGHT - 1,
+            height - 1,
             int(max(sy0, sy1, sy2))
         )
 
@@ -355,9 +369,11 @@ def render_arrays(
 
 def enhance_cavities(shade, depth):
 
-    for y in range(1, HEIGHT - 1):
+    height, width = depth.shape
 
-        for x in range(1, WIDTH - 1):
+    for y in range(1, height - 1):
+
+        for x in range(1, width - 1):
 
             if depth[y, x] <= -9990:
                 continue
@@ -413,6 +429,8 @@ def make_frame(shade):
 
     global previous_screen
 
+    frame_height, frame_width = shade.shape
+
     # --------------------------------------------------------
     # Animated full-screen background
     # --------------------------------------------------------
@@ -420,14 +438,14 @@ def make_frame(shade):
     background_active = background_enabled
 
     background_mask = np.zeros(
-        (HEIGHT, WIDTH),
+        (frame_height, frame_width),
         dtype=np.bool_
     )
 
     if background_active:
 
         screen = np.full(
-            (HEIGHT, WIDTH),
+            (frame_height, frame_width),
             " ",
             dtype="<U1"
         )
@@ -435,9 +453,9 @@ def make_frame(shade):
         bg_chars = ".:*+·'`"
         bg_time = time.monotonic()
 
-        for y in range(HEIGHT):
+        for y in range(frame_height):
 
-            for x in range(WIDTH):
+            for x in range(frame_width):
 
                 # Several overlapping waves create a moving
                 # digital atmosphere across the whole terminal.
@@ -491,7 +509,7 @@ def make_frame(shade):
             (bg_time * 8.0) % HEIGHT
         )
 
-        for x in range(WIDTH):
+        for x in range(frame_width):
 
             if random.random() < 0.75:
                 screen[scanline, x] = random.choice(
@@ -501,9 +519,9 @@ def make_frame(shade):
         # Occasional background signal burst.
         if random.random() < 0.08:
 
-            burst_y = random.randrange(HEIGHT)
+            burst_y = random.randrange(frame_height)
 
-            for x in range(WIDTH):
+            for x in range(frame_width):
 
                 if random.random() < 0.20:
                     screen[burst_y, x] = random.choice(
@@ -513,7 +531,7 @@ def make_frame(shade):
     else:
 
         screen = np.full(
-            (HEIGHT, WIDTH),
+            (frame_height, frame_width),
             " ",
             dtype="<U1"
         )
@@ -540,9 +558,9 @@ def make_frame(shade):
 
         pulse = 0.94
 
-    for y in range(HEIGHT):
+    for y in range(frame_height):
 
-        for x in range(WIDTH):
+        for x in range(frame_width):
 
             value = shade[y, x] * flicker
 
@@ -578,7 +596,7 @@ def make_frame(shade):
 
         original = screen[y].copy()
 
-        for x in range(WIDTH):
+        for x in range(frame_width):
 
             source = x - shift
 
@@ -628,10 +646,16 @@ def make_frame(shade):
 
     if glitches_enabled and random.random() < tear_chance:
 
-        start_y = random.randrange(
-            10,
-            HEIGHT - 12
-        )
+        if HEIGHT > 22:
+            start_y = random.randrange(
+                10,
+                HEIGHT - 12
+            )
+        else:
+            start_y = max(
+                0,
+                (HEIGHT - 1) // 2
+            )
 
         tear_height = random.randint(
             1,
@@ -656,7 +680,7 @@ def make_frame(shade):
 
             original = screen[y].copy()
 
-            for x in range(WIDTH):
+            for x in range(frame_width):
 
                 source = x - shift
 
@@ -691,7 +715,7 @@ def make_frame(shade):
                 [-4, -3, 3, 4]
             )
 
-            for x in range(WIDTH):
+            for x in range(frame_width):
 
                 source = x - shift
 
@@ -787,8 +811,8 @@ def make_frame(shade):
         if breath > 0.65:
             chance = 0.035 + (breath - 0.65) * 0.20
 
-            for y in range(HEIGHT):
-                for x in range(WIDTH):
+            for y in range(frame_height):
+                for x in range(frame_width):
                     if screen[y, x] != " ":
                         if random.random() < chance:
                             screen[y, x] = random.choice(
@@ -877,7 +901,7 @@ def make_frame(shade):
                 [-6, -5, 5, 6]
             )
 
-            for x in range(WIDTH):
+            for x in range(frame_width):
 
                 source = x - shift
 
@@ -900,7 +924,7 @@ def make_frame(shade):
 
         for y in range(0, HEIGHT, 2):
 
-            for x in range(WIDTH):
+            for x in range(frame_width):
 
                 if (
                     screen[y, x] != " "
@@ -916,9 +940,9 @@ def make_frame(shade):
 
         if random.random() < 0.12:
 
-            for y in range(HEIGHT):
+            for y in range(frame_height):
 
-                for x in range(WIDTH):
+                for x in range(frame_width):
 
                     if (
                         screen[y, x] != " "
@@ -932,9 +956,9 @@ def make_frame(shade):
 
     if disintegrate_enabled or all_effects:
 
-        for y in range(HEIGHT):
+        for y in range(frame_height):
 
-            for x in range(WIDTH):
+            for x in range(frame_width):
 
                 if (
                     screen[y, x] != " "
@@ -974,14 +998,14 @@ def make_frame(shade):
         )
 
         shaken = np.full(
-            (HEIGHT, WIDTH),
+            (frame_height, frame_width),
             " ",
             dtype="<U1"
         )
 
-        for y in range(HEIGHT):
+        for y in range(frame_height):
 
-            for x in range(WIDTH):
+            for x in range(frame_width):
 
                 source = x - shift
 
@@ -1345,6 +1369,32 @@ try:
 
     while True:
 
+        # ------------------------------------------------
+        # Live terminal resize detection
+        # ------------------------------------------------
+
+        terminal = shutil.get_terminal_size(
+            fallback=(110, 42)
+        )
+
+        new_width = max(40, terminal.columns)
+        new_height = max(20, terminal.lines)
+
+        if (
+            new_width != WIDTH
+            or new_height != HEIGHT
+        ):
+            WIDTH = new_width
+            HEIGHT = new_height
+
+            scale = min(
+                WIDTH / 110.0,
+                HEIGHT / 42.0
+            )
+
+            SX = 48.0 * scale
+            SY = 23.5 * scale
+
         read_keys()
 
         if quit_requested:
@@ -1373,7 +1423,11 @@ try:
             vertices,
             faces,
             vertex_normals,
-            light
+            light,
+            WIDTH,
+            HEIGHT,
+            SX,
+            SY
         )
 
         enhance_cavities(
