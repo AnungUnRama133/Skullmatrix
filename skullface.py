@@ -536,6 +536,288 @@ def make_frame(shade):
             dtype="<U1"
         )
 
+    # --------------------------------------------------------
+    # Simple skull rain
+    # --------------------------------------------------------
+
+    if simple_skull_rain_enabled:
+
+        if not hasattr(make_frame, "_simple_rain"):
+            make_frame._simple_rain = []
+
+        simple_rain = make_frame._simple_rain
+
+        target_count = max(
+            5,
+            min(
+                24,
+                frame_width // 7
+            )
+        )
+
+        while len(simple_rain) < target_count:
+
+            simple_rain.append({
+                "x": random.uniform(
+                    0,
+                    max(1, frame_width - 1)
+                ),
+                "y": random.uniform(
+                    -frame_height,
+                    -1.0
+                ),
+                "speed": random.uniform(
+                    0.10,
+                    0.35
+                ),
+                "drift": random.uniform(
+                    -0.03,
+                    0.03
+                )
+            })
+
+        if len(simple_rain) > target_count:
+            del simple_rain[target_count:]
+
+        for drop in simple_rain:
+
+            drop["y"] += drop["speed"]
+            drop["x"] += drop["drift"]
+
+            if (
+                drop["y"] > frame_height
+                or drop["x"] < -1
+                or drop["x"] >= frame_width
+            ):
+
+                drop["x"] = random.uniform(
+                    0,
+                    max(1, frame_width - 1)
+                )
+
+                drop["y"] = random.uniform(
+                    -12.0,
+                    -1.0
+                )
+
+                drop["speed"] = random.uniform(
+                    0.10,
+                    0.35
+                )
+
+                drop["drift"] = random.uniform(
+                    -0.03,
+                    0.03
+                )
+
+            draw_x = int(drop["x"])
+            draw_y = int(drop["y"])
+
+            if (
+                0 <= draw_x < frame_width
+                and 0 <= draw_y < frame_height
+            ):
+
+                screen[
+                    draw_y,
+                    draw_x
+                ] = "☠"
+
+                background_mask[
+                    draw_y,
+                    draw_x
+                ] = False
+
+    # --------------------------------------------------------
+    # Mini 3D skull rain
+    # --------------------------------------------------------
+
+    if skull_rain_enabled:
+
+        if not hasattr(make_frame, "_rain"):
+            make_frame._rain = []
+
+        rain = make_frame._rain
+
+        # Find the visible part of the actual 3D skull.
+        visible = shade > 0.025
+
+        if np.any(visible):
+
+            ys, xs = np.where(visible)
+
+            skull_min_x = int(xs.min())
+            skull_max_x = int(xs.max())
+            skull_min_y = int(ys.min())
+            skull_max_y = int(ys.max())
+
+            skull_crop = shade[
+                skull_min_y:skull_max_y + 1,
+                skull_min_x:skull_max_x + 1
+            ]
+
+            crop_h, crop_w = skull_crop.shape
+
+            # Keep the falling skulls small enough to look
+            # like individual objects rather than copies
+            # of the main skull.
+            rain_h = 9
+            rain_w = max(
+                5,
+                min(
+                    15,
+                    int(
+                        crop_w
+                        * (rain_h / max(1, crop_h))
+                    )
+                )
+            )
+
+            target_count = max(
+                3,
+                min(
+                    12,
+                    frame_width // 18
+                )
+            )
+
+            while len(rain) < target_count:
+
+                rain.append({
+                    "x": random.uniform(
+                        -rain_w,
+                        max(0, frame_width - 1)
+                    ),
+                    "y": random.uniform(
+                        -frame_height,
+                        -2.0
+                    ),
+                    "speed": random.uniform(
+                        0.10,
+                        0.24
+                    ),
+                    "drift": random.uniform(
+                        -0.018,
+                        0.018
+                    )
+                })
+
+            if len(rain) > target_count:
+                del rain[target_count:]
+
+            # Resize the real skull crop into a tiny sprite.
+            sprite = np.zeros(
+                (rain_h, rain_w),
+                dtype=np.float32
+            )
+
+            for sy in range(rain_h):
+
+                source_y = int(
+                    sy
+                    * crop_h
+                    / rain_h
+                )
+
+                source_y = min(
+                    crop_h - 1,
+                    max(0, source_y)
+                )
+
+                for sx in range(rain_w):
+
+                    source_x = int(
+                        sx
+                        * crop_w
+                        / rain_w
+                    )
+
+                    source_x = min(
+                        crop_w - 1,
+                        max(0, source_x)
+                    )
+
+                    sprite[sy, sx] = (
+                        skull_crop[
+                            source_y,
+                            source_x
+                        ]
+                    )
+
+            for drop in rain:
+
+                drop["y"] += drop["speed"]
+                drop["x"] += drop["drift"]
+
+                if (
+                    drop["y"] > frame_height
+                    or drop["x"] < -rain_w
+                    or drop["x"] >= frame_width
+                ):
+
+                    drop["x"] = random.uniform(
+                        0,
+                        max(0, frame_width - rain_w)
+                    )
+
+                    drop["y"] = random.uniform(
+                        -15.0,
+                        -2.0
+                    )
+
+                    drop["speed"] = random.uniform(
+                        0.10,
+                        0.24
+                    )
+
+                    drop["drift"] = random.uniform(
+                        -0.018,
+                        0.018
+                    )
+
+                base_x = int(drop["x"])
+                base_y = int(drop["y"])
+
+                for sy in range(rain_h):
+
+                    for sx in range(rain_w):
+
+                        value = sprite[sy, sx]
+
+                        if value <= 0.12:
+                            continue
+
+                        draw_x = base_x + sx
+                        draw_y = base_y + sy
+
+                        if (
+                            0 <= draw_x < frame_width
+                            and 0 <= draw_y < frame_height
+                        ):
+
+                            index = int(
+                                value
+                                * (len(CHARS) - 1)
+                            )
+
+                            index = max(
+                                0,
+                                min(
+                                    len(CHARS) - 1,
+                                    index
+                                )
+                            )
+
+                            screen[
+                                draw_y,
+                                draw_x
+                            ] = CHARS[index]
+
+                            background_mask[
+                                draw_y,
+                                draw_x
+                            ] = False
+
     levels = len(CHARS) - 1
 
     # Very subtle brightness flicker
@@ -575,7 +857,10 @@ def make_frame(shade):
 
             # Only replace the background where the skull
             # actually has visible geometry.
-            if value > 0.025:
+            if (
+                main_skull_enabled
+                and value > 0.025
+            ):
                 screen[y, x] = CHARS[index]
                 background_mask[y, x] = False
 
@@ -1194,6 +1479,10 @@ all_effects = False
 background_enabled = False
 background_color_mode = 0
 
+main_skull_enabled = True
+skull_rain_enabled = False
+simple_skull_rain_enabled = False
+
 # Extra visual effects
 rainbow_enabled = False
 electric_enabled = False
@@ -1226,6 +1515,9 @@ def read_keys():
     global all_effects
     global background_enabled
     global background_color_mode
+    global main_skull_enabled
+    global skull_rain_enabled
+    global simple_skull_rain_enabled
     global rainbow_enabled
     global electric_enabled
     global crt_enabled
@@ -1269,6 +1561,15 @@ def read_keys():
 
         elif key in ("l", "L"):
             moving_light = not moving_light
+
+        elif key in ("j", "J"):
+            main_skull_enabled = not main_skull_enabled
+
+        elif key in ("k", "K"):
+            skull_rain_enabled = not skull_rain_enabled
+
+        elif key in ("m", "M"):
+            simple_skull_rain_enabled = not simple_skull_rain_enabled
 
         elif key == "[":
             light_speed = max(
